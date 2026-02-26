@@ -1,0 +1,10 @@
+# ===== DevOps Agent MCP Server 配置示例 =====
+
+gitlab:
+  base_url: "http://your-gitlab-server.com"
+  token: "your-gitlab-personal-access-token"
+  default_branch: "master"
+
+slack:
+  bot_token: "xoxb-your-slack-bot-token"
+  default_channel: "#general"
