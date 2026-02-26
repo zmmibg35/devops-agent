@@ -305,3 +305,65 @@ def register_github_tools(mcp: FastMCP, client: GitHubClient):
                 "html_url": r.get("html_url", ""),
             })
         return json.dumps(result, ensure_ascii=False, indent=2)
+
+    # ==================== Projects V2 看板 ====================
+
+    @mcp.tool()
+    async def github_list_projects() -> str:
+        """列出当前用户的所有 GitHub Projects 看板。"""
+        projects = await client.list_projects()
+        result = []
+        for p in projects:
+            result.append({
+                "id": p["id"],
+                "number": p["number"],
+                "title": p["title"],
+                "description": p.get("shortDescription", ""),
+                "url": p.get("url", ""),
+                "closed": p.get("closed", False),
+            })
+        return json.dumps(result, ensure_ascii=False, indent=2)
+
+    @mcp.tool()
+    async def github_add_to_project(
+        project_name: str,
+        repo: str,
+        issue_number: int,
+    ) -> str:
+        """将一个 Issue 添加到 GitHub Project 看板中。
+
+        会自动通过项目名称模糊匹配找到对应的 Project。
+
+        Args:
+            project_name: Project 看板名称（如 "开发智能体"），支持模糊匹配
+            repo: Issue 所在的仓库名（如 owner/repo）
+            issue_number: Issue 编号
+        """
+        # 1. 查找 Project
+        project = await client.get_project_by_name(project_name)
+        if not project:
+            return json.dumps({
+                "error": f"未找到名为 '{project_name}' 的 Project",
+                "message": "请检查项目名称是否正确，或使用 github_list_projects 查看所有项目",
+            }, ensure_ascii=False, indent=2)
+
+        # 2. 获取 Issue 的 Node ID
+        issue_node_id = await client.get_issue_node_id(repo=repo, issue_number=issue_number)
+        if not issue_node_id:
+            return json.dumps({
+                "error": f"未找到 Issue #{issue_number}",
+                "message": "请确认 Issue 编号和仓库名是否正确",
+            }, ensure_ascii=False, indent=2)
+
+        # 3. 添加到 Project
+        item = await client.add_issue_to_project(
+            project_id=project["id"],
+            issue_node_id=issue_node_id,
+        )
+        return json.dumps({
+            "project_title": project["title"],
+            "issue_number": issue_number,
+            "item_id": item.get("id", ""),
+            "message": f"Issue #{issue_number} 已添加到看板 '{project['title']}'",
+        }, ensure_ascii=False, indent=2)
+

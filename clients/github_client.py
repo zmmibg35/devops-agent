@@ -335,3 +335,137 @@ class GitHubClient:
         runs = result.get("workflow_runs", [])
         logger.info(f"获取到 {len(runs)} 条 Actions 记录 (仓库={full})")
         return runs
+
+    # ==================== GraphQL（Projects V2 必需） ====================
+
+    GRAPHQL_URL = "https://api.github.com/graphql"
+
+    async def _graphql(self, query: str, variables: dict = None) -> dict:
+        """发送 GraphQL 请求"""
+        payload = {"query": query}
+        if variables:
+            payload["variables"] = variables
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                self.GRAPHQL_URL, headers=self.headers, json=payload
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if "errors" in data:
+                logger.error(f"GraphQL 错误: {data['errors']}")
+                raise Exception(f"GraphQL Error: {data['errors'][0].get('message', '')}")
+            return data.get("data", {})
+
+    # ==================== Projects V2 看板 ====================
+
+    async def list_projects(self, per_page: int = 20) -> list[dict]:
+        """
+        列出当前用户的所有 GitHub Projects V2
+
+        Returns:
+            项目列表，每项包含 id, number, title, url
+        """
+        query = """
+        query($login: String!, $first: Int!) {
+          user(login: $login) {
+            projectsV2(first: $first, orderBy: {field: UPDATED_AT, direction: DESC}) {
+              nodes {
+                id
+                number
+                title
+                shortDescription
+                url
+                closed
+              }
+            }
+          }
+        }
+        """
+        data = await self._graphql(query, {"login": self.owner, "first": per_page})
+        projects = data.get("user", {}).get("projectsV2", {}).get("nodes", [])
+        logger.info(f"获取到 {len(projects)} 个 Project")
+        return projects
+
+    async def get_project_by_name(self, name: str) -> dict | None:
+        """
+        通过名称模糊匹配查找 Project
+
+        Args:
+            name: 项目名称（支持模糊匹配）
+
+        Returns:
+            匹配到的 Project，未找到返回 None
+        """
+        projects = await self.list_projects(per_page=50)
+        name_lower = name.lower().strip()
+        # 精确匹配
+        for p in projects:
+            if p["title"].lower() == name_lower:
+                logger.info(f"精确匹配 Project: {p['title']} (ID: {p['id']})")
+                return p
+        # 模糊匹配
+        for p in projects:
+            if name_lower in p["title"].lower():
+                logger.info(f"模糊匹配 Project: {p['title']} (ID: {p['id']})")
+                return p
+        logger.warning(f"未找到 Project: {name}")
+        return None
+
+    async def add_issue_to_project(
+        self,
+        project_id: str,
+        issue_node_id: str,
+    ) -> dict:
+        """
+        将 Issue 添加到 Project 看板
+
+        Args:
+            project_id: Project 的 GraphQL Node ID
+            issue_node_id: Issue 的 GraphQL Node ID
+
+        Returns:
+            添加结果，包含 item ID
+        """
+        mutation = """
+        mutation($projectId: ID!, $contentId: ID!) {
+          addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
+            item {
+              id
+            }
+          }
+        }
+        """
+        data = await self._graphql(mutation, {
+            "projectId": project_id,
+            "contentId": issue_node_id,
+        })
+        item = data.get("addProjectV2ItemById", {}).get("item", {})
+        logger.info(f"Issue 已添加到 Project (item_id={item.get('id', '')})")
+        return item
+
+    async def get_issue_node_id(self, repo: str, issue_number: int) -> str:
+        """
+        获取 Issue 的 GraphQL Node ID（用于 Projects V2 操作）
+
+        Args:
+            repo: 仓库名
+            issue_number: Issue 编号
+        """
+        full = self._full_repo(repo)
+        owner, name = full.split("/", 1)
+        query = """
+        query($owner: String!, $repo: String!, $number: Int!) {
+          repository(owner: $owner, name: $repo) {
+            issue(number: $number) {
+              id
+            }
+          }
+        }
+        """
+        data = await self._graphql(query, {
+            "owner": owner, "repo": name, "number": issue_number,
+        })
+        node_id = data.get("repository", {}).get("issue", {}).get("id", "")
+        logger.debug(f"Issue #{issue_number} Node ID: {node_id}")
+        return node_id
+
