@@ -8,6 +8,7 @@ build/
 
 # 配置（含敏感 Token）
 config.yaml
+.env
 
 # IDE
 .idea/

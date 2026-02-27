@@ -25,9 +25,17 @@ def register_slack_tools(mcp: FastMCP, client: SlackClient):
             text: 消息内容（支持 Slack mrkdwn 格式，如 *加粗*、`代码`、> 引用）
             channel: 目标频道（如 #general），留空则使用默认频道
         """
+        # 指定了频道时，先解析并校验频道名称
+        target_channel = None
+        if channel:
+            channel_id, error = await client.validate_and_resolve_channel(channel)
+            if error:
+                return json.dumps({"ok": False, "error": error}, ensure_ascii=False, indent=2)
+            target_channel = channel_id
+
         result = await client.send_message(
             text=text,
-            channel=channel or None,
+            channel=target_channel,
         )
         return json.dumps(result, ensure_ascii=False, indent=2)
 
@@ -50,6 +58,14 @@ def register_slack_tools(mcp: FastMCP, client: SlackClient):
             priority: 优先级（紧急 / 高 / 普通 / 低）
             channel: 目标频道（如 #general），留空则使用默认频道
         """
+        # 指定了频道时，先解析并校验频道名称
+        target_channel = None
+        if channel:
+            channel_id, error = await client.validate_and_resolve_channel(channel)
+            if error:
+                return json.dumps({"ok": False, "error": error}, ensure_ascii=False, indent=2)
+            target_channel = channel_id
+
         # 如果指定了负责人，尝试通过名字查找 Slack 用户并 @提及
         display_assignee = assignee
         if assignee:
@@ -68,7 +84,7 @@ def register_slack_tools(mcp: FastMCP, client: SlackClient):
         result = await client.send_blocks(
             blocks=blocks,
             text=f"📌 新任务: {title}",
-            channel=channel or None,
+            channel=target_channel,
         )
         return json.dumps({
             **result,

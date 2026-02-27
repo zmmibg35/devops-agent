@@ -26,6 +26,8 @@ class SlackClient:
         self.default_channel = default_channel
         # 用户名缓存：避免重复调用 API
         self._user_cache: dict[str, dict] = {}
+        # 频道缓存：避免重复调用 API
+        self._channel_cache: dict[str, dict] = {}
 
     async def send_message(
         self,
@@ -95,7 +97,7 @@ class SlackClient:
         """获取频道列表"""
         try:
             response = await self.client.conversations_list(
-                types="public_channel", limit=limit
+                types="public_channel,private_channel", limit=limit
             )
             channels = response.get("channels", [])
             logger.debug(f"获取到 {len(channels)} 个频道")
@@ -106,6 +108,92 @@ class SlackClient:
         except SlackApiError as e:
             logger.error(f"获取频道列表失败: {e.response['error']}")
             raise
+
+    # ==================== 频道解析 ====================
+
+    async def _load_all_channels(self) -> None:
+        """加载所有公共频道到缓存"""
+        if self._channel_cache:
+            return
+        try:
+            cursor = None
+            while True:
+                kwargs: dict = {"types": "public_channel,private_channel", "limit": 200}
+                if cursor:
+                    kwargs["cursor"] = cursor
+                response = await self.client.conversations_list(**kwargs)
+                for ch in response.get("channels", []):
+                    self._channel_cache[ch["id"]] = {
+                        "id": ch["id"],
+                        "name": ch["name"],
+                    }
+                cursor = response.get("response_metadata", {}).get("next_cursor")
+                if not cursor:
+                    break
+            logger.info(f"已加载 {len(self._channel_cache)} 个频道到缓存")
+        except SlackApiError as e:
+            logger.error(f"加载频道列表失败: {e.response['error']}")
+            raise
+
+    async def resolve_channel(self, name: str) -> Optional[dict]:
+        """
+        通过频道名称解析为频道信息
+
+        支持带/不带 '#' 前缀（如 '#general' 或 'general'）。
+        先精确匹配，后模糊匹配。
+
+        Args:
+            name: 频道名称
+
+        Returns:
+            匹配到的频道信息（含 id、name），未找到返回 None
+        """
+        await self._load_all_channels()
+        # 去掉 '#' 前缀并统一小写
+        name_clean = name.lstrip("#").lower().strip()
+        if not name_clean:
+            return None
+
+        # 精确匹配
+        for ch in self._channel_cache.values():
+            if ch["name"].lower() == name_clean:
+                logger.info(f"精确匹配频道: {name} → #{ch['name']} (ID: {ch['id']})")
+                return ch
+
+        # 模糊匹配（频道名包含输入关键词）
+        for ch in self._channel_cache.values():
+            if name_clean in ch["name"].lower():
+                logger.info(f"模糊匹配频道: {name} → #{ch['name']} (ID: {ch['id']})")
+                return ch
+
+        logger.warning(f"未找到频道: {name}")
+        return None
+
+    async def validate_and_resolve_channel(self, name: str) -> tuple[Optional[str], Optional[str]]:
+        """
+        校验并解析频道名称，返回 (频道ID, 错误信息)
+
+        成功时返回 (channel_id, None)，失败时返回 (None, 错误描述)
+
+        Args:
+            name: 频道名称
+
+        Returns:
+            (channel_id, error_message) 二元组
+        """
+        ch = await self.resolve_channel(name)
+        if ch:
+            return ch["id"], None
+
+        # 构建友好错误信息，列出可用频道
+        await self._load_all_channels()
+        available = [f"#{c['name']}" for c in self._channel_cache.values()]
+        available_str = "、".join(available) if available else "无"
+        error_msg = (
+            f"频道 '{name}' 不存在或 Bot 未加入该频道。\n"
+            f"当前可用频道: {available_str}"
+        )
+        return None, error_msg
 
     # ==================== 用户查找 ====================
 
@@ -227,5 +315,4 @@ class SlackClient:
             ],
         })
 
-        return blocks
         return blocks
