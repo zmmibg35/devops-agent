@@ -5,6 +5,8 @@ __pycache__/
 dist/
 build/
 .venv/
+.pytest_cache/
+.ruff_cache/
 
 # 配置（含敏感 Token）
 config.yaml

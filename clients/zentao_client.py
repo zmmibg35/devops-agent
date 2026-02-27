@@ -8,6 +8,8 @@
 import httpx
 from loguru import logger
 
+from clients.exceptions import ZentaoAPIError
+
 
 class ZentaoClient:
     """禅道 REST API 异步客户端"""
@@ -48,7 +50,7 @@ class ZentaoClient:
             logger.info(f"禅道登录成功: {self.account}")
         except httpx.HTTPError as e:
             logger.error(f"禅道登录失败: {e}")
-            raise
+            raise ZentaoAPIError(f"禅道登录失败: {e}", cause=e) from e
 
     def _headers(self) -> dict:
         """构建带 Token 的请求头"""

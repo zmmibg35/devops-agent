@@ -1,7 +1,7 @@
 """
 DevOps Agent MCP Server 入口
 
-基于 FastMCP 构建，集成 GitHub + Slack，供 Antigravity 调用。
+基于 FastMCP 构建，集成 GitHub + Slack + 禅道，供 Antigravity 调用。
 Token 等敏感配置通过环境变量传入，支持团队每人独立配置。
 """
 

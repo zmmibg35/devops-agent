@@ -1,6 +1,6 @@
 [project]
 name = "devops-agent"
-version = "0.1.0"
+version = "0.2.0"
 description = "DevOps Agent MCP Server - 集成 GitHub、Slack 和禅道的 DevOps 智能助手"
 requires-python = ">=3.11"
 dependencies = [

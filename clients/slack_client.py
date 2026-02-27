@@ -9,6 +9,8 @@ from loguru import logger
 from slack_sdk.errors import SlackApiError
 from slack_sdk.web.async_client import AsyncWebClient
 
+from clients.exceptions import SlackAPIError as DevOpsSlackError
+
 
 class SlackClient:
     """Slack Web API 异步客户端"""
@@ -45,7 +47,7 @@ class SlackClient:
             }
         except SlackApiError as e:
             logger.error(f"发送消息失败: {e.response['error']}")
-            raise
+            raise DevOpsSlackError(f"发送消息失败: {e.response['error']}", error_code=e.response['error'], cause=e) from e
 
     async def send_blocks(
         self,
@@ -67,7 +69,7 @@ class SlackClient:
             }
         except SlackApiError as e:
             logger.error(f"发送 Block 消息失败: {e.response['error']}")
-            raise
+            raise DevOpsSlackError(f"发送 Block 消息失败: {e.response['error']}", error_code=e.response['error'], cause=e) from e
 
     async def update_message(
         self,
@@ -90,7 +92,7 @@ class SlackClient:
             }
         except SlackApiError as e:
             logger.error(f"更新消息失败: {e.response['error']}")
-            raise
+            raise DevOpsSlackError(f"更新消息失败: {e.response['error']}", error_code=e.response['error'], cause=e) from e
 
     async def list_channels(self, limit: int = 100) -> list[dict]:
         """获取频道列表"""
@@ -106,7 +108,7 @@ class SlackClient:
             ]
         except SlackApiError as e:
             logger.error(f"获取频道列表失败: {e.response['error']}")
-            raise
+            raise DevOpsSlackError(f"获取频道列表失败: {e.response['error']}", error_code=e.response['error'], cause=e) from e
 
     # ==================== 频道解析 ====================
 
