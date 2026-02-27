@@ -4,11 +4,10 @@ Slack Web API 客户端
 封装 Slack API 的消息发送、任务管理等操作。
 """
 
-from typing import Optional
 
 from loguru import logger
-from slack_sdk.web.async_client import AsyncWebClient
 from slack_sdk.errors import SlackApiError
+from slack_sdk.web.async_client import AsyncWebClient
 
 
 class SlackClient:
@@ -32,7 +31,7 @@ class SlackClient:
     async def send_message(
         self,
         text: str,
-        channel: Optional[str] = None,
+        channel: str | None = None,
     ) -> dict:
         """发送文本消息"""
         ch = channel or self.default_channel
@@ -52,7 +51,7 @@ class SlackClient:
         self,
         blocks: list[dict],
         text: str = "",
-        channel: Optional[str] = None,
+        channel: str | None = None,
     ) -> dict:
         """发送 Block Kit 富文本消息"""
         ch = channel or self.default_channel
@@ -75,7 +74,7 @@ class SlackClient:
         channel: str,
         ts: str,
         text: str = "",
-        blocks: Optional[list[dict]] = None,
+        blocks: list[dict] | None = None,
     ) -> dict:
         """更新已发送的消息（用于更新任务状态）"""
         try:
@@ -135,7 +134,7 @@ class SlackClient:
             logger.error(f"加载频道列表失败: {e.response['error']}")
             raise
 
-    async def resolve_channel(self, name: str) -> Optional[dict]:
+    async def resolve_channel(self, name: str) -> dict | None:
         """
         通过频道名称解析为频道信息
 
@@ -169,7 +168,7 @@ class SlackClient:
         logger.warning(f"未找到频道: {name}")
         return None
 
-    async def validate_and_resolve_channel(self, name: str) -> tuple[Optional[str], Optional[str]]:
+    async def validate_and_resolve_channel(self, name: str) -> tuple[str | None, str | None]:
         """
         校验并解析频道名称，返回 (频道ID, 错误信息)
 
@@ -225,7 +224,7 @@ class SlackClient:
             logger.error(f"加载用户列表失败: {e.response['error']}")
             raise
 
-    async def find_user_by_name(self, name: str) -> Optional[dict]:
+    async def find_user_by_name(self, name: str) -> dict | None:
         """
         通过名字查找 Slack 用户（支持中文名、英文名、用户名模糊匹配）
 

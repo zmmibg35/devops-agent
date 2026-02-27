@@ -4,7 +4,6 @@
 封装禅道 API v1 的认证、Bug、任务、需求等操作。
 """
 
-from typing import Optional
 
 import httpx
 from loguru import logger
@@ -27,7 +26,7 @@ class ZentaoClient:
         self.api_url = f"{self.base_url}/api.php/v1"
         self.account = account
         self.password = password
-        self._token: Optional[str] = None
+        self._token: str | None = None
         self._client = httpx.AsyncClient(timeout=30)
 
     # ==================== 认证 ====================
@@ -55,7 +54,7 @@ class ZentaoClient:
         """构建带 Token 的请求头"""
         return {"Token": self._token or ""}
 
-    async def _get(self, path: str, params: Optional[dict] = None) -> dict:
+    async def _get(self, path: str, params: dict | None = None) -> dict:
         """发送 GET 请求"""
         await self._ensure_token()
         url = f"{self.api_url}{path}"

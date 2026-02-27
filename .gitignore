@@ -19,6 +19,3 @@ config.yaml
 .DS_Store
 Thumbs.db
 
-# 测试
-tests/test_connectivity.py
-tests/test_v2_features.py

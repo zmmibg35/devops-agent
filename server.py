@@ -36,7 +36,7 @@ def load_config() -> dict:
     config_path = Path(__file__).parent / "config.yaml"
     file_config = {}
     if config_path.exists():
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(config_path, encoding="utf-8") as f:
             file_config = yaml.safe_load(f) or {}
 
     github_file = file_config.get("github", {})

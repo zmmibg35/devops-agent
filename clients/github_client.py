@@ -5,10 +5,11 @@ GitHub REST API 客户端
 """
 
 import base64
-from typing import Optional
 
 import httpx
 from loguru import logger
+
+from clients.exceptions import GitHubAPIError
 
 
 class GitHubClient:
@@ -31,6 +32,8 @@ class GitHubClient:
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
         }
+        # 复用 HTTP Client，避免每次请求都创建新连接
+        self._client = httpx.AsyncClient(timeout=30, headers=self.headers)
 
     async def _request(
         self,
@@ -41,12 +44,20 @@ class GitHubClient:
     ) -> dict | list:
         """发送 API 请求"""
         url = f"{self.API_BASE}{path}"
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.request(
-                method, url, headers=self.headers, params=params, json=json_body
+        try:
+            resp = await self._client.request(
+                method, url, params=params, json=json_body
             )
             resp.raise_for_status()
             return resp.json()
+        except httpx.HTTPStatusError as e:
+            raise GitHubAPIError(
+                f"GitHub API 请求失败: {method} {path} → {e.response.status_code}",
+                status_code=e.response.status_code,
+                cause=e,
+            ) from e
+        except httpx.HTTPError as e:
+            raise GitHubAPIError(f"GitHub API 网络错误: {method} {path}", cause=e) from e
 
     def _full_repo(self, repo: str) -> str:
         """
@@ -67,7 +78,7 @@ class GitHubClient:
         """获取当前用户的仓库列表"""
         params = {"per_page": per_page, "sort": "updated", "direction": "desc"}
         result = await self._request("GET", "/user/repos", params)
-        logger.debug(f"获取到 {len(result)} 个仓库")
+        logger.debug(f"[查询] 获取到 {len(result)} 个仓库")
         return result
 
     async def search_repos(self, query: str, per_page: int = 10) -> list[dict]:
@@ -89,8 +100,8 @@ class GitHubClient:
         self,
         repo: str,
         branch: str = "",
-        since: Optional[str] = None,
-        until: Optional[str] = None,
+        since: str | None = None,
+        until: str | None = None,
         per_page: int = 20,
     ) -> list[dict]:
         """
@@ -112,14 +123,14 @@ class GitHubClient:
         if until:
             params["until"] = until
         result = await self._request("GET", f"/repos/{full}/commits", params)
-        logger.info(f"获取到 {len(result)} 条提交记录 (仓库={full})")
+        logger.debug(f"[查询] 获取到 {len(result)} 条提交记录 (仓库={full})")
         return result
 
     async def get_commit_detail(self, repo: str, sha: str) -> dict:
         """获取某次提交的详情（含 Diff）"""
         full = self._full_repo(repo)
         result = await self._request("GET", f"/repos/{full}/commits/{sha}")
-        logger.info(f"获取到提交 {sha[:8]} 的详情 ({len(result.get('files', []))} 个文件变更)")
+        logger.debug(f"[查询] 获取到提交 {sha[:8]} 的详情 ({len(result.get('files', []))} 个文件变更)")
         return result
 
     # ==================== Pull Request ====================
@@ -141,7 +152,7 @@ class GitHubClient:
         full = self._full_repo(repo)
         params = {"state": state, "per_page": per_page, "sort": "updated"}
         result = await self._request("GET", f"/repos/{full}/pulls", params)
-        logger.info(f"获取到 {len(result)} 个 PR (仓库={full}, 状态={state})")
+        logger.debug(f"[查询] 获取到 {len(result)} 个 PR (仓库={full}, 状态={state})")
         return result
 
     # ==================== Issue 管理 ====================
@@ -150,7 +161,7 @@ class GitHubClient:
         self,
         repo: str,
         state: str = "open",
-        labels: Optional[str] = None,
+        labels: str | None = None,
         per_page: int = 20,
     ) -> list[dict]:
         """
@@ -169,7 +180,7 @@ class GitHubClient:
         result = await self._request("GET", f"/repos/{full}/issues", params)
         # GitHub API 会把 PR 也当作 Issue 返回，需要过滤
         issues = [i for i in result if "pull_request" not in i]
-        logger.info(f"获取到 {len(issues)} 个 Issue (仓库={full}, 状态={state})")
+        logger.debug(f"[查询] 获取到 {len(issues)} 个 Issue (仓库={full}, 状态={state})")
         return issues
 
     async def create_issue(
@@ -177,8 +188,8 @@ class GitHubClient:
         repo: str,
         title: str,
         body: str = "",
-        labels: Optional[list[str]] = None,
-        assignees: Optional[list[str]] = None,
+        labels: list[str] | None = None,
+        assignees: list[str] | None = None,
     ) -> dict:
         """
         创建 Issue
@@ -206,10 +217,10 @@ class GitHubClient:
         self,
         repo: str,
         issue_number: int,
-        title: Optional[str] = None,
-        body: Optional[str] = None,
-        state: Optional[str] = None,
-        labels: Optional[list[str]] = None,
+        title: str | None = None,
+        body: str | None = None,
+        state: str | None = None,
+        labels: list[str] | None = None,
     ) -> dict:
         """
         更新 Issue
@@ -316,7 +327,7 @@ class GitHubClient:
     async def get_workflow_runs(
         self,
         repo: str,
-        status: Optional[str] = None,
+        status: str | None = None,
         per_page: int = 10,
     ) -> list[dict]:
         """
@@ -345,16 +356,19 @@ class GitHubClient:
         payload = {"query": query}
         if variables:
             payload["variables"] = variables
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                self.GRAPHQL_URL, headers=self.headers, json=payload
+        try:
+            resp = await self._client.post(
+                self.GRAPHQL_URL, json=payload
             )
             resp.raise_for_status()
             data = resp.json()
             if "errors" in data:
-                logger.error(f"GraphQL 错误: {data['errors']}")
-                raise Exception(f"GraphQL Error: {data['errors'][0].get('message', '')}")
+                error_msg = data['errors'][0].get('message', '')
+                logger.error(f"GraphQL 错误: {error_msg}")
+                raise GitHubAPIError(f"GraphQL Error: {error_msg}")
             return data.get("data", {})
+        except httpx.HTTPError as e:
+            raise GitHubAPIError("GraphQL 网络错误", cause=e) from e
 
     # ==================== Projects V2 看板 ====================
 

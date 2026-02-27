@@ -1,7 +1,7 @@
 [project]
 name = "devops-agent"
 version = "0.1.0"
-description = "DevOps Agent MCP Server - 集成 GitLab 和 Slack"
+description = "DevOps Agent MCP Server - 集成 GitHub、Slack 和禅道的 DevOps 智能助手"
 requires-python = ">=3.11"
 dependencies = [
     "mcp[cli]>=1.0.0",
@@ -14,3 +14,27 @@ dependencies = [
 
 [project.scripts]
 devops-agent = "server:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.8.0",
+]
+
+# ==================== Ruff 代码检查配置 ====================
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501", "N803"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["clients", "tools"]
+
+# ==================== Pytest 配置 ====================
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

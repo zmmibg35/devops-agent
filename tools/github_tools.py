@@ -161,7 +161,7 @@ def register_github_tools(mcp: FastMCP, client: GitHubClient):
                 "state": issue["state"],
                 "user": issue.get("user", {}).get("login", ""),
                 "assignees": assignees,
-                "labels": [l.get("name", "") for l in issue.get("labels", [])],
+                "labels": [label.get("name", "") for label in issue.get("labels", [])],
                 "created_at": issue["created_at"],
                 "html_url": issue["html_url"],
             })
@@ -184,7 +184,7 @@ def register_github_tools(mcp: FastMCP, client: GitHubClient):
             labels: 标签（逗号分隔，如 "bug,urgent"）
             assignees: 指派人用户名（逗号分隔）
         """
-        label_list = [l.strip() for l in labels.split(",") if l.strip()] if labels else None
+        label_list = [label.strip() for label in labels.split(",") if label.strip()] if labels else None
         assignee_list = [a.strip() for a in assignees.split(",") if a.strip()] if assignees else None
         issue = await client.create_issue(
             repo=repo, title=title, body=body,
@@ -217,7 +217,7 @@ def register_github_tools(mcp: FastMCP, client: GitHubClient):
             state: 新状态：open / closed（留空不修改）
             labels: 新标签（逗号分隔，留空不修改）
         """
-        label_list = [l.strip() for l in labels.split(",") if l.strip()] if labels else None
+        label_list = [label.strip() for label in labels.split(",") if label.strip()] if labels else None
         issue = await client.update_issue(
             repo=repo, issue_number=issue_number,
             title=title or None, body=body or None,
