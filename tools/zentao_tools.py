@@ -92,6 +92,16 @@ def register_zentao_tools(mcp: FastMCP, client: ZentaoClient):
         return json.dumps(result, ensure_ascii=False, indent=2)
 
     @mcp.tool()
+    async def zentao_get_task(task_id: int) -> str:
+        """获取禅道任务详情。
+
+        Args:
+            task_id: 任务 ID（如 3435）
+        """
+        task = await client.get_task(task_id)
+        return json.dumps(task, ensure_ascii=False, indent=2)
+
+    @mcp.tool()
     async def zentao_list_tasks(
         execution_id: int,
         status: str = "",

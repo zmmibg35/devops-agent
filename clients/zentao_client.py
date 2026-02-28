@@ -246,6 +246,17 @@ class ZentaoClient:
 
     # ==================== 任务 ====================
 
+    async def get_task(self, task_id: int) -> dict:
+        """
+        获取任务详情
+
+        Args:
+            task_id: 任务 ID
+        """
+        data = await self._get(f"/tasks/{task_id}")
+        logger.info(f"已获取任务 #{task_id} 详情")
+        return data
+
     async def list_tasks(
         self,
         execution_id: int,
